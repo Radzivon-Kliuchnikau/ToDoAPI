@@ -1,44 +1,35 @@
+using Microsoft.EntityFrameworkCore;
+using ToDoAPI.Data;
+using ToDoAPI.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+  options.UseInMemoryDatabase("ToDoItemsDb");
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.MapGet("api/v1/todo", async (AppDbContext context) =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+  var items = await context.ToDoItems.ToListAsync<ToDoItem>();
 
-app.UseHttpsRedirection();
+  return Results.Ok(items);
+});
 
-var summaries = new[]
+app.MapPost("api/v1/todo", async (AppDbContext context, ToDoItem todoItem) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+  if (todoItem == null)
+  {
+    return Results.BadRequest();
+  }
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+  await context.AddAsync<ToDoItem>(todoItem);
+
+  await context.SaveChangesAsync();
+
+  return Results.Created($"api/v1/todo/{todoItem.Id}", todoItem);
+});
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
